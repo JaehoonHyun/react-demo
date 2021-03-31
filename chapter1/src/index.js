@@ -23,40 +23,36 @@ import './index.css'
 //     }
 // }
 
+/*
+중요 : 
+버튼에 onClick 이벤트 발생 
+-> sqaure 컴포넌트가 객체화된 props의 onClick 호출 
+-> board가 square 컴포넌트를 객체화함. (board의 renderSquares 함수)
+-> board의 renderSquares 함수에서 sqaure props의 onclick을 this.props.onclick을 호출하도록 함, 이 때 squares의 i가 걸림
+-> this.props.onClick은 Game Component에서 Board를 객체화함으로써 걸림
+-> Game Component의 board를 객체화한 곳에 props의 onClick은 파라미터를 i를 받아서 처리함 
+-> this.handleClick에 파라미터 i를 넘겨서 Game Component에서 핸들링 가능함
+
+결론: 클로져 개념이 들어갔다.
+*/
 function Square(props) {
     return (
+        // props에 정의된 onClick함수를 호출함
         <button className="square" onClick={props.onClick}>
-            {props.value}
+            {/* 여기서 O, X만 전달됨 */}
+            {props.value} 
         </button>
     )
 }
 
 class Board extends React.Component {
 
-    constructor(props) {
-        super(props)
-        this.state = {
-            //null로 채운다.
-            squares: Array(9).fill(null),
-            xIsNext: true,
-        }
-    }
-
-    handleClick(i) {
-        const squares = this.state.squares.slice() //배열을 복사한다
-        //이미 승리하였으면 무시.
-        if (calculateWinner(squares) || squares[i]) {
-            return;
-        }
-        squares[i] = this.state.xIsNext ? "X" : "O"
-        this.setState({squares: squares, xIsNext: !this.state.xIsNext}) //TODO: 해당자리에 중복으로는 놓는경우 에러처리
-    }
-
+    //여기서 sqaures의 인덱스를 주입함. ㄷㄷ
     renderSquare(i) {
         return (
             <Square 
-            value={this.state.squares[i]} 
-            onClick={() => this.handleClick(i)}
+            value={this.props.squares[i]} //square component의 props의 values로 전달됨
+            onClick={() => this.props.onClick(i)} //square component의 props의 onClick으로 전달됨, 이건 Game Component에서 또 hook함
             />
         )
     }
@@ -64,18 +60,8 @@ class Board extends React.Component {
     
 
     render() {
-        const winner = calculateWinner(this.state.squares);
-        let status;
-        if (winner) {
-            status = 'Winner: ' + winner;
-        } else {
-            status = 'Next player: ' + (this.state.xIsNext ? 'X' : 'O');
-        }
-      
-
         return (
             <div>
-                <div className="status">{status}</div>
                 <div className="board-row">
                     {this.renderSquare(0)}
                     {this.renderSquare(1)}
@@ -97,15 +83,89 @@ class Board extends React.Component {
 }
 
 class Game extends React.Component {
+
+    constructor(props) {
+        super(props)
+        this.state = {
+            history: [
+                {
+                    squares: Array(9).fill(null),
+                }
+            ],
+            stepNumber: 0,
+            xIsNext: true,
+        }
+    }
+
+    jumpTo(step) {
+        this.setState(
+            {
+                stepNumber: step,
+                xIsNext: (step % 2) === 0,
+            }
+        )
+    }
+
+    handleClick(i) {
+
+        const history = this.state.history.slice(0, this.state.stepNumber + 1);
+        const current = history[history.length - 1]
+        const squares = current.squares.slice()
+
+        //이미 승리하였으면 무시.
+        if (calculateWinner(squares) || squares[i]) {
+            return;
+        }
+        squares[i] = this.state.xIsNext ? "X" : "O"
+        this.setState(
+            {
+                history: history.concat(
+                    [
+                        {
+                            squares: squares,
+                        },
+                    ]
+                ),
+                stepNumber: history.length,
+                xIsNext: !this.state.xIsNext,
+            }) //TODO: 해당자리에 중복으로는 놓는경우 에러처리
+    }
+
     render() {
+
+        //이전 history로 돌아가는 경우 stepNumber까지의 상태를 저장한다.
+        const history = this.state.history
+        const current = history[this.state.stepNumber]
+        const winner = calculateWinner(current.squares)
+
+        const moves = history.map((step, move) => {
+            const desc = move ?
+                "Go to move #" +move:
+                "GO to game start"
+
+            return (
+                <li key={move}>
+                    <button onClick={()=>this.jumpTo(move)}>{desc}</button>
+                </li>
+            )
+        })
+        let status
+        if(winner) {
+            status = "Winner: " + winner
+        }else{
+            status = "Next Player is " + (this.state.xIsNext ? "X" : "O") //괄호 필수
+        }
+
         return (
             <div className="game">
                 <div className="game-board">
-                    <Board />
+                    {/* onclick이라는 함수가 어케 squrare의 i를 파라미터를 받을 수 있는거지? */}
+                    {/* onClick이라는 함수를 props에 추가함. 얘는 game의 handleClick을 호출함 */}
+                    <Board squares={current.squares} onClick={(i)=> this.handleClick(i)}/>
                 </div>
                 <div className="game-info">
-                    <div>{ /* status */}</div>
-                    <ol>{ /* TODO */ }</ol>
+                    <div>{status}</div>
+                    <ol>{moves}</ol>
                 </div>
             </div>
         )
